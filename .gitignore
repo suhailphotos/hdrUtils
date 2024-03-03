@@ -155,6 +155,13 @@ cython_debug/
 #Google's libultrahdr
 /external/libultrahdr
 
+# Ignore image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
