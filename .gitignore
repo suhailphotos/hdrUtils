@@ -165,6 +165,7 @@ cython_debug/
 *.jpeg
 *.gif
 *.bmp
+*.yuv
 
 
 # PyCharm
