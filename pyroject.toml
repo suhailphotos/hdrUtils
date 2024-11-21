@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "hdrUtils"
+version = "0.1.0"
+description = "Package description for hdrUtils"
+authors = ["Suhail <suhailece@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "hdrUtils", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "3.10.10"
+# Add any package-specific dependencies here
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
