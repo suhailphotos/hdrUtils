@@ -5,10 +5,10 @@ description = "Package description for hdrUtils"
 authors = ["Suhail <suhailece@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "hdrUtils", from = "src"}]
+packages = [{include = "hdrutils", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "3.10.10"
+python = ">=3.11,<4.0"
 # Add any package-specific dependencies here
 
 [build-system]
