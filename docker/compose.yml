@@ -1,0 +1,14 @@
+services:
+  pyvips:
+    # You can build locally and tag an image, OR point to a remote image later.
+    build:
+      context: ./        # this is the docker/ folder
+      dockerfile: Dockerfile
+      args:
+        LIBVIPS_REF: ${LIBVIPS_REF:-master}
+        LIBUHDR_REF: ${LIBUHDR_REF:-main}
+    image: ${IMAGE:-suhailphotos/vips-uhdr:local}
+    working_dir: /work
+    volumes:
+      - ..:/work         # mount hdrUtils project root
+    entrypoint: ["python3"]
