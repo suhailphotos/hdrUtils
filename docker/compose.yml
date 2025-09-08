@@ -8,6 +8,7 @@ services:
         LIBVIPS_REF: ${LIBVIPS_REF:-master}
         LIBUHDR_REF: ${LIBUHDR_REF:-main}
     image: ${IMAGE:-suhailphotos/vips-uhdr:local}
+    user: "${UID:-1000}:${GID:-1000}"
     working_dir: /work
     volumes:
       - ..:/work         # mount hdrUtils project root
