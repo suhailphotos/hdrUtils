@@ -1,40 +1,28 @@
-# hdrUtils — UltraHDR (JPEG Gain Map) with libvips in Docker
+# hdrUtils — UltraHDR (JPEG Gain Map) Testbed (Containerized)
 
-This repo gives you a **repeatable, isolated** way to test and process **UltraHDR** (JPEG gain‑map) images using **libvips** + **libultrahdr**—built from source—wrapped by Python **pyvips** inside a Docker runner. No host-level libvips installs; just run the container against your working tree.
-
-> Target machine: **nimbus** (Ubuntu Server with Docker). macOS hosts are intentionally not used for Docker here.
+> **TL;DR**: This repo is a **Linux-first testbed** for experimenting with [Google’s `libultrahdr`](https://github.com/google/libultrahdr) via a custom **libvips + UltraHDR** build, wrapped in a clean, reproducible **Docker runner**. It includes small Python scripts to **inspect** and **resize/compress** UltraHDR JPEGs without leaving the container. Future direction: a lightweight Python CLI built on top of `libultrahdr`/libvips.
 
 ---
 
-## Contents
+## What this repository is (and isn’t)
 
-- [What you get](#what-you-get)
-- [Repo layout](#repo-layout)
-- [Prereqs](#prereqs)
-- [Build the image (local-dev mode)](#build-the-image-local-dev-mode)
-- [Update/pin libvips/libultrahdr (update.sh)](#updatepin-libvipslibultrahdr-updatesh)
-- [Sanity check](#sanity-check)
-- [Test samples: sRGB + Display‑P3](#test-samples-srgb--displayp3)
-- [Inspect an UltraHDR JPEG (extract ICC + gain‑map fields)](#inspect-an-ultrahdr-jpeg-extract-icc--gainmap-fields)
-- [Resize / crop / recompress UltraHDR](#resize--crop--recompress-ultrahdr)
-- [Ownership & Dropbox sync notes](#ownership--dropbox-sync-notes)
-- [Switching to a prebuilt image](#switching-to-a-prebuilt-image)
-- [Troubleshooting quick hits](#troubleshooting-quick-hits)
+- **Is:** a reproducible **containerized environment** to build libvips **with UltraHDR support** (enabled by `libultrahdr`) and to **test** UltraHDR workflows from Python (`pyvips`).
+- **Is not:** a fork or re-packaging of `libultrahdr`. The authoritative source is the upstream project. We simply build it from source inside the image and provide convenient test scripts.
+- **Status:** actively iterated for testing and experimentation; API/commands may change.
+
+### Upstream & Attribution
+
+- Core library: **Google `libultrahdr`** → <https://github.com/google/libultrahdr>
+- Image samples & learning resource: **Greg Benz Photography** → <https://gregbenzphotography.com/>  
+  Samples here are for testing only; visit Greg’s site for background, tutorials, and guidance.
 
 ---
 
-## What you get
+## Why containerize?
 
-- **Reproducible build** of:
-  - `google/libultrahdr` (CMake) → installed into `/opt/vips`
-  - `libvips` with **UltraHDR support** (`-Duhdr=enabled`) via **Meson** → also under `/opt/vips`
-- **Python runner** with a dedicated venv and **pyvips**.
-- A **docker-compose** service `pyvips` which mounts your repo into `/work` and runs Python inside the container.
-- Convenience scripts:
-  - `scripts/ultrahdr_inspect.py` — dump gain‑map metadata and ICC; writes ICC next to the input by default.
-  - `scripts/ultrahdr_ops.py` — resize/crop/recompress while preserving UltraHDR (base + gain map) via `uhdrsave`.
-
-Why Meson for libvips? The official libvips build uses **Meson**; enabling UltraHDR in-tree is a Meson option (`-Duhdr=enabled`), so we follow upstream’s supported path.
+- **Reproducible builds:** libvips + UltraHDR can be finicky across distros/versions. The Dockerfile pins a sane toolchain and builds from upstream on each image build.
+- **Isolation:** no need to pollute your host with build deps, and you can re-build as upstream changes.
+- **Host-agnostic testing:** although designed for Linux (Ubuntu 24.04 base), the same image can run on any Linux box with Docker. (Author runs on a Linux server “**nimbus**”; macOS hosts are intentionally out-of-scope here.)
 
 ---
 
@@ -42,246 +30,210 @@ Why Meson for libvips? The official libvips build uses **Meson**; enabling Ultra
 
 ```
 hdrUtils/
-├── docker/
-│   ├── Dockerfile        # multi-stage build: libultrahdr + libvips(+uhdr) → runtime with pyvips
-│   ├── compose.yml       # runner service (mounts project at /work; entrypoint=python3)
-│   └── update.sh         # buildx updater that pins HEAD SHAs and tags :current + content tag
-├── samples/
-│   ├── ISO_JPG_P3_transcoding_test_Greg_Benz.jpg
-│   ├── ISO_JPG_P3_transcoding_test_Greg_Benz_profile.icc   # provided reference ICC for P3 sample
-│   └── ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg
-└── scripts/
-    ├── ultrahdr_inspect.py
-    └── ultrahdr_ops.py
+├─ docker/
+│  ├─ Dockerfile        # Builds libultrahdr + libvips(uhdr) + pyvips runtime
+│  ├─ compose.yml       # Runner service (mounts repo into /work)
+│  └─ update.sh         # Helper to rebuild/push tagged images from upstream HEADs
+├─ scripts/
+│  ├─ ultrahdr_inspect.py  # Inspect UltraHDR JPEGs (gainmap, ICC, metadata)
+│  └─ ultrahdr_ops.py      # Resize / crop / re-encode UltraHDR JPEGs
+├─ samples/
+│  ├─ ISO_JPG_P3_transcoding_test_Greg_Benz.jpg
+│  ├─ ISO_JPG_P3_transcoding_test_Greg_Benz_profile.icc  # example output from inspect
+│  └─ ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg
+└─ src/hdrutils/… (future convenience wrappers live here)
 ```
 
 ---
 
-## Prereqs
+## Requirements
 
-- **Docker** and **buildx** on `nimbus` (already present).
-- You are in the repo root when running commands shown below (unless explicitly `cd docker/`).
+- Linux host with **Docker** (and **docker compose v2**).  
+- `docker buildx` available (modern Docker includes it).
+- You can optionally export your host UID/GID for correct file ownership (Compose does this automatically).
 
 ---
 
-## Build the image (local-dev mode)
+## How the image is built
 
-This uses the compose file under `docker/` which **builds** from `Dockerfile` and tags the image as `suhailphotos/vips-uhdr:local` by default.
+The container is a **two-stage** build:
+
+1. **Builder stage** (Ubuntu 24.04): installs build toolchain, builds **`libultrahdr`** from source, then builds **`libvips`** with `-Duhdr=enabled` linking to that `libultrahdr` install.
+2. **Runtime stage** (Ubuntu 24.04): installs libvips runtime deps, creates a small **Python venv** with `pyvips`, and exposes vips/py as tools.
+
+See [`docker/Dockerfile`](docker/Dockerfile) for the exact steps.
+
+### Build locally (once)
+
+From repo root:
 
 ```bash
-# from repo root
 docker compose -f docker/compose.yml build
 ```
 
-You can pin specific revisions at build time:
-
-```bash
-# Examples (tag/branch/SHA all work)
-LIBVIPS_REF=master LIBUHDR_REF=main \
-docker compose -f docker/compose.yml build
-```
-
-The Dockerfile installs both libraries under `/opt/vips` and sets up a Python venv with `pyvips`.
-
----
-
-## Update/pin libvips/libultrahdr (update.sh)
-
-`docker/update.sh` is a convenience script that resolves **HEAD SHAs** for both repos (unless you provide a `LIBVIPS_REF` / `LIBUHDR_REF`) and builds a content-addressed tag. It also tags `:current`.
-
-```bash
-# from repo root
-cd docker
-
-# Build locally and load to the Docker daemon (no push)
-./update.sh
-
-# Build and push to Docker Hub (requires you to be logged in; will tag :current)
-./update.sh --push
-
-# Pin to specific commits or tags
-LIBVIPS_REF=v8.15.0 \
-LIBUHDR_REF=main \
-./update.sh --push
-```
-
-**Using the freshly built tag with compose:** either set `IMAGE` when you run compose or edit `compose.yml` to point at the tag you want.
-
-```bash
-# Use the image produced by update.sh (e.g., :current) without rebuilding
-IMAGE=suhailphotos/vips-uhdr:current \
-docker compose -f docker/compose.yml run --rm pyvips -c "import pyvips; print('ok')"
-```
-
-> If both `build:` and `image:` exist in compose, Compose may still build locally. To **force** using a prebuilt image, temporarily comment out `build:` lines in `docker/compose.yml` or pass `IMAGE=...` and ensure the tag exists locally (or pull it).
-
----
-
-## Sanity check
-
-Confirm the Python runner sees UltraHDR operations:
-
-```bash
-docker compose -f docker/compose.yml run --rm pyvips -c \
-"import pyvips as v; print('pyvips', v.__version__); print('has uhdrload?', hasattr(v.Image,'uhdrload'))"
-# Expect:
-# pyvips 3.x
-# has uhdrload? True
-```
-
----
-
-## Test samples: sRGB + Display‑P3
-
-We include two sample UltraHDR JPEGs (from Greg Benz): one **sRGB**, one **Display‑P3**.
-
-Paths (inside the container these are available under `/work/samples/...`):
-
-- `/work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg`
-- `/work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg`
-
----
-
-## Inspect an UltraHDR JPEG (extract ICC + gain‑map fields)
-
-The inspector **writes the ICC profile next to the input** by default, named `<stem>_profile.icc`. You can also pass an explicit output path as the second argument.
-
-**sRGB test**
+Verify `pyvips` sees UltraHDR support:
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips \
-  /work/scripts/ultrahdr_inspect.py \
-  /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg
-
-# Output excerpt:
-#  <N> bytes of gainmap data
-#  gainmap: <w>x<h> bands=<b>
-#  <M> bytes of ICC profile data
-#  profile written to /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz_profile.icc
-#  gainmap-max-content-boost = [...]
-#  ...
+  -c "import pyvips as v; print('pyvips', v.__version__); print('has uhdrload?', hasattr(v.Image,'uhdrload'))"
+# Expected:
+# pyvips 3.x.x
+# has uhdrload? True
 ```
 
-**Display‑P3 test**
+> **Note:** Compose service mounts the repo root at **`/work`** inside the container and runs as your **host UID:GID**, so generated files are owned by you and sync cleanly (e.g., with Dropbox).
+
+---
+
+## Staying current with upstream (`update.sh`)
+
+`docker/update.sh` resolves the current **HEAD commits** of upstream repos and tags an image accordingly:
+
+- Image tag format: `<first12-of-libvips-commit>-<first12-of-libultrahdr-commit>`
+- Also tags `:current` for convenience.
+
+### Usage
+
+From `docker/`:
+
+```bash
+# Build locally and load into the daemon
+./update.sh
+
+# Push to Docker Hub (set your repo first if desired)
+IMAGE_REPO=suhailphotos/vips-uhdr ./update.sh --push
+
+# Pin to specific commits (optional)
+LIBVIPS_REF=<commit-or-branch> LIBUHDR_REF=<commit-or-branch> ./update.sh
+```
+
+After building/pushing with `update.sh`, you can point `docker/compose.yml` at your remote image by setting `IMAGE`:
+
+```bash
+# Example: use the freshly pushed image
+IMAGE=suhailphotos/vips-uhdr:current docker compose -f docker/compose.yml run --rm pyvips -c "import pyvips"
+```
+
+> ✅ **Is the script still valid?** Yes — it uses `git ls-remote` to resolve commit hashes and passes those to the Docker build as `LIBVIPS_REF` / `LIBUHDR_REF`. It works whether you build **locally** (`--load`) or **push** (`--push`).
+
+---
+
+## Quick tests (P3 & sRGB)
+
+Below commands assume you run them from repo root and have the sample images in `samples/`.
+
+### 1) Inspect UltraHDR JPEG
+
+The inspector prints the size of the embedded **gain map**, extracts the **ICC profile** (if present) next to your input (default `<name>_profile.icc`), and dumps key UltraHDR metadata fields.
+
+**Display P3 sample:**
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips \
   /work/scripts/ultrahdr_inspect.py \
   /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg
-
-# You should see a similar dump; ICC gets written as
-# /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz_profile.icc
 ```
 
-**Explicit ICC output path**
+**sRGB sample:**
+
+```bash
+docker compose -f docker/compose.yml run --rm pyvips \
+  /work/scripts/ultrahdr_inspect.py \
+  /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg
+```
+
+**Custom ICC output path (optional):**
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips \
   /work/scripts/ultrahdr_inspect.py \
   /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg \
-  /work/samples/P3.icc
+  /work/samples/P3_profile.icc
 ```
 
----
+**Typical output** (varies by file):
 
-## Resize / crop / recompress UltraHDR
-
-`ultrahdr_ops.py` preserves UltraHDR (base + gain map) using `uhdrsave`.
-
-**Compress only (no resize), Q=80**
-
-```bash
-docker compose -f docker/compose.yml run --rm pyvips \
-  /work/scripts/ultrahdr_ops.py \
-  /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg \
-  /work/samples/sRGB_Q80.jpg \
-  -q 80
+```
+675674 bytes of gainmap data
+gainmap: 1080x1350 bands=3
+620 bytes of ICC profile data
+profile written to /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz_profile.icc
+gainmap-max-content-boost = [16.0, 16.0, 16.0]
+gainmap-min-content-boost = [1.0, 1.0, 1.0]
+gainmap-gamma = [1.0, 1.0, 1.0]
+…
 ```
 
-**Resize to width=1024 (keep aspect)**
+### 2) Resize / crop / re-encode (preserves gain map)
+
+`ultrahdr_ops.py` uses libvips’ `uhdrsave` to write an UltraHDR JPEG (gain map preserved).
+
+**Compress only (no size change):**
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips \
   /work/scripts/ultrahdr_ops.py \
   /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg \
-  /work/samples/P3_w1024.jpg \
+  /work/samples/P3_Q80.jpg \
+  -q 80
+```
+
+**Resize to width 1024 (keep aspect):**
+
+```bash
+docker compose -f docker/compose.yml run --rm pyvips \
+  /work/scripts/ultrahdr_ops.py \
+  /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg \
+  /work/samples/sRGB_w1024.jpg \
   --width 1024 -q 85
 ```
 
-**Center-crop to 1024×1024 via “fit then smartcrop”**
+**Crop then fit to a 1024×1024 square (smartcrop):**
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips \
   /work/scripts/ultrahdr_ops.py \
   /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg \
   /work/samples/P3_square_1024.jpg \
-  --width 1024 --height 1024 -q 85
+  --crop 100 100 2000 2000 --width 1024 --height 1024 -q 85
 ```
 
-**Manual crop box first, then fit + smartcrop**
+**Expected tail output:**
 
-```bash
-docker compose -f docker/compose.yml run --rm pyvips \
-  /work/scripts/ultrahdr_ops.py \
-  /work/samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg \
-  /work/samples/sRGB_cropped_1024.jpg \
-  --crop 100 100 2000 2500 --width 1024 --height 1024 -q 85
 ```
-
-On success you’ll see a confirmation like:
-```
-wrote: /work/samples/P3_w1024.jpg
-base: 1024x...  gainmap: ...  quality: 85
+wrote: /work/samples/P3_square_1024.jpg
+base: 1024x1024  gainmap: 1080x1350  quality: 85
 ```
 
 ---
 
-## Ownership & Dropbox sync notes
+## Tips on file ownership & paths
 
-Compose maps your user with:
-```yaml
-user: "${UID:-1000}:${GID:-1000}"
-```
-To ensure files are owned by you (so Dropbox syncs immediately), always pass your host IDs when running:
-
-```bash
-UID=$(id -u) GID=$(id -g) \
-docker compose -f docker/compose.yml run --rm pyvips \
-  /work/scripts/ultrahdr_inspect.py /work/samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg
-```
-
-If you accidentally created root-owned files, fix them from the host:
-```bash
-sudo chown -R "$(id -u)":"$(id -g)" samples/
-```
+- Compose runs the container as `user: "${UID}:${GID}"`, so files created under `/work` are owned by you (helpful if this repo lives in **Dropbox**, etc.).
+- All paths in the examples are under `/work/...` (the repo root mounted inside the container).
+- To write outputs next to inputs, pass an explicit output path in `/work/samples/...` as shown above.
 
 ---
 
-## Switching to a prebuilt image
+## Roadmap
 
-If you used `docker/update.sh --push` to publish `suhailphotos/vips-uhdr:current`, you can run without building locally:
-
-```bash
-IMAGE=suhailphotos/vips-uhdr:current \
-docker compose -f docker/compose.yml run --rm pyvips -c "import pyvips; print('ok')"
-```
-
-To avoid local rebuilds, temporarily comment out the `build:` section in `docker/compose.yml` or ensure the prebuilt image exists locally (`docker pull suhailphotos/vips-uhdr:current`).
+- A **Python CLI** wrapper for common UltraHDR workflows (convert, inspect, batch resize).
+- Optional **FastAPI** service for programmatic testing on the home-lab server.
+- (Later) CI to build and push image tags automatically as upstream changes.
 
 ---
 
-## Troubleshooting quick hits
+## License & acknowledgements
 
-- **`has uhdrload? False`** — your libvips wasn’t built with UltraHDR. Rebuild ensuring `-Duhdr=enabled` (the Dockerfile already does this).
-- **Runtime can’t find `libwebpmux` / `libwebpdemux`** — the runtime stage needs WebP libs; they are included in `Dockerfile` (`libwebpmux3`, `libwebpdemux2`).
-- **ICC written to unexpected place** — `ultrahdr_inspect.py` writes the ICC **beside the input** (derived name). Pass an explicit second path to override.
-- **Files show up late in Dropbox** — usually an ownership issue; ensure `UID/GID` are passed so outputs are owned by your user.
+- This repo (scripts/docs/config) is **MIT-licensed** (see `LICENSE`).
+- **`libultrahdr`** and **`libvips`** are licensed under their respective upstream terms — please consult their repositories.
+- Sample images credited to **Greg Benz Photography**; used here for testing/demonstration only.
 
 ---
 
-## References
+## Contact / issues
 
-- `docker/Dockerfile` — full build details & options.
-- `docker/update.sh` — content-addressed tagging of libvips/libultrahdr builds.
-- `scripts/ultrahdr_inspect.py` — simple metadata/ICC extraction.
-- `scripts/ultrahdr_ops.py` — resize/crop/compress preserving UltraHDR gain map.
+If you spot bugs or want a feature in the container/scripts, please open an issue or PR. For library behavior and UltraHDR implementation details, see the upstream projects:
+
+- <https://github.com/google/libultrahdr>
+- <https://github.com/libvips/libvips>
