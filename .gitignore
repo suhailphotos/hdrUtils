@@ -160,8 +160,8 @@ cython_debug/
 /external/libultrahdr
 
 # Ignore image files
-*.png
-*.jpg
+# *.png
+# *.jpg
 *.jpeg
 *.gif
 *.bmp
