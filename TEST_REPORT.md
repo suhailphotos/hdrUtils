@@ -10,9 +10,9 @@
 
 ---
 ## Reference Images
----
 **Display P3 Sample**
 ![Display P3 Sampple](samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg)
+---
 ## Capability check
 
 ```bash
