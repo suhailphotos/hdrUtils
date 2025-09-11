@@ -9,7 +9,7 @@
 > The goal is to validate read/write behavior for UltraHDR (JPEG gain map) when compressing, resizing, and cropping. We test both P3 and sRGB source images (square 1080×1080).
 
 ---
-**![Reference Images](samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg)
+**![Reference Images](samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg)**
 ## Capability check
 
 ```bash
