@@ -240,14 +240,6 @@ gainmap: 640x640 bands=3
 * **Uniform resize** without syncing the gain map produced visually-correct results in quick checks, but geometry differs; consider syncing map in strict pipelines.
 * **Cropping** without syncing the gain map causes obvious mismatch; **synchronized crop** fixes it (see `scripts/ultrahdr_crop_sync.py`).
 
----
-
-## Next steps / suggestions
-
-* Add tests for **resize+crop** with map sync (scale the cropped map before re-embedding).
-* Add tests for **non-square** sources, large up/downscales, different qualities, and rotation/mirror.
-* Compare output against **Android** or Chrome UltraHDR renderers to quantify deltas.
-* Automate via CI (GitHub Actions) with a matrix of sizes/qualities and P3 vs sRGB.
 
 ---
 
