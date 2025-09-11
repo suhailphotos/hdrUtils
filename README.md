@@ -1,26 +1,41 @@
 # hdrUtils — UltraHDR (JPEG gain map) test harness (Docker + pyvips)
 
-> **Status:** Work-in-progress test harness. This repo is *not* a fork of the UltraHDR codec. It containers a reproducible build of **libvips** with **libultrahdr** support enabled, plus a few Python scripts to exercise common workflows (inspect, compress, resize, crop).
+> **Status:** Work-in-progress test harness. This repo is *not* a fork of the UltraHDR codec. It contains a reproducible build of **libvips** with **libultrahdr** support enabled, plus a few Python scripts to exercise common workflows (inspect, compress, resize, crop).
 
 ## What this repository is (and isn’t)
 
-- **Goal (now):** Provide a clean, repeatable environment to **test** UltraHDR (JPEG gain map) read/write through **libvips** and **pyvips**, and to validate practical workflows (thumbnailing, compression, cropping).  
-- **Future direction:** Likely a small Python CLI/SDK to make common UltraHDR operations convenient (e.g., “resize + keep HDR”).  
+- **Goal (now):** Provide a clean, repeatable environment to **test** UltraHDR (JPEG gain map) read/write through **libvips** and **pyvips**, and to validate practical workflows (thumbnailing, compression, cropping).
+- **Future direction:** Likely a small Python CLI/SDK to make common UltraHDR operations convenient (e.g., “resize + keep HDR”).
 - **Not included:** The codec itself. The authoritative sources remain upstream:
   - **UltraHDR reference & tooling:** https://github.com/google/libultrahdr
   - **Image processing library:** https://github.com/libvips/libvips
   - **Python bindings:** https://github.com/libvips/pyvips
 
-**Sample images** used for testing are courtesy of **Greg Benz Photography**: https://gregbenzphotography.com/  
+**Sample images** used for testing are courtesy of **Greg Benz Photography**: https://gregbenzphotography.com/
 Please see the `samples/` folder and attribution below.
+
+---
+
+## TL;DR — Results
+
+- **Full findings & console output:** see **[TEST_REPORT.md](TEST_REPORT.md)**.
+- **Quick artifact links (plain links; click to view):**
+  - **Sources:**
+    - P3: [`samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg`](samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg)
+    - sRGB: [`samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg`](samples/ISO_JPG_sRGB_transcoding_test_Greg_Benz.jpg)
+  - **Outputs (generated in this repo):**
+    - Recompress (Q=75): [`samples/P3_q75.jpg`](samples/P3_q75.jpg) · ICC dump: [`samples/P3_q75_profile.icc`](samples/P3_q75_profile.icc)
+    - Uniform resize to 512px: [`samples/P3_w512.jpg`](samples/P3_w512.jpg) · ICC: [`samples/P3_w512_profile.icc`](samples/P3_w512_profile.icc)
+    - **Crop (no sync)** — intentional mismatch: [`samples/P3_crop_640_nosync.jpg`](samples/P3_crop_640_nosync.jpg) · ICC: [`samples/P3_crop_640_nosync_profile.icc`](samples/P3_crop_640_nosync_profile.icc)
+    - **Crop (synced)** — map aligned: [`samples/P3_crop_640_sync.jpg`](samples/P3_crop_640_sync.jpg) · ICC: [`samples/P3_crop_640_sync_profile.icc`](samples/P3_crop_640_sync_profile.icc)
 
 ---
 
 ## Why containerize?
 
-- **Reproducible**: Pins to known commits of `libvips` and `libultrahdr` on every build.  
-- **Isolated**: No OS package drift. Everything under `/opt/vips` inside the image.  
-- **Fast updates**: `docker/update.sh` resolves and tags images against upstream HEADs or your chosen refs.  
+- **Reproducible**: Pins to known commits of `libvips` and `libultrahdr` on every build.
+- **Isolated**: No OS package drift. Everything under `/opt/vips` inside the image.
+- **Fast updates**: `docker/update.sh` resolves and tags images against upstream HEADs or your chosen refs.
 - **Single host**: Intended to run on a Linux host (e.g., my `nimbus`). I don’t run Docker for Mac for this project.
 
 ---
@@ -195,9 +210,10 @@ hdrUtils/
 
 ## License & attribution
 
-- This repo: **MIT** (see `LICENSE`).  
-- UltraHDR reference & tools: **google/libultrahdr** (see its repo for license/terms).  
-- libvips / pyvips: (see their repos for license/terms).  
+- This repo: **MIT** (see `LICENSE`).
+- UltraHDR reference & tools: **google/libultrahdr** (see its repo for license/terms).
+- libvips / pyvips: (see their repos for license/terms).
 - Sample images © **Greg Benz Photography**; used here for testing with attribution.
 
 If you have questions or find issues, please open an issue or PR. PRs adding automated tests for more edge cases (resize+crop sync, rotation, etc.) are very welcome.
+
