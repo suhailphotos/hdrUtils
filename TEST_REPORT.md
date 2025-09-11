@@ -1,16 +1,16 @@
 # UltraHDR test report
 
-**Repo:** `hdrUtils`  
-**Host:** Ubuntu (nimbus) with Docker Buildx  
-**Container:** libvips (uhdr enabled) + pyvips  
-**Upstreams used for this build:** `LIBVIPS_REF=master`, `LIBUHDR_REF=main`  
+**Repo:** `hdrUtils`
+**Host:** Ubuntu (nimbus) with Docker Buildx
+**Container:** libvips (uhdr enabled) + pyvips
+**Upstreams used for this build:** `LIBVIPS_REF=master`, `LIBUHDR_REF=main`
 **pyvips:** 3.0.0 (from container)
 
 > The goal is to validate read/write behavior for UltraHDR (JPEG gain map) when compressing, resizing, and cropping. We test both P3 and sRGB source images (square 1080×1080).
 
 ---
-
-## 0) Capability check
+**![Reference Images](samples/ISO_JPG_P3_transcoding_test_Greg_Benz.jpg)
+## Capability check
 
 ```bash
 docker compose -f docker/compose.yml run --rm pyvips   -c "import pyvips as v; print('pyvips', v.__version__); print('has uhdrload?', hasattr(v.Image,'uhdrload'))"
