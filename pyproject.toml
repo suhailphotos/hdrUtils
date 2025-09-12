@@ -9,8 +9,12 @@ project.authors = [
   { name = "Suhail", email = "suhailece@gmail.com" },
 ]
 
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
-# Original [tool.poetry] has been migrated to PEP 621 by migrate2uv.sh
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/hdrutils",
+]
